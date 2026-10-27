@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crypto Prices</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d10; color: #f2f4f7;
+    font-family: "LG Smart UI", "Segoe UI", Roboto, Arial, sans-serif; }
+  body { display: flex; flex-direction: column; justify-content: center; padding: 0 8vw; box-sizing: border-box; }
+  .row { display: flex; align-items: baseline; justify-content: space-between;
+    padding: 3.2vh 0; border-bottom: 1px solid #1f242b; }
+  .row:last-of-type { border-bottom: 0; }
+  .name { font-size: 4.2vh; color: #9aa4b2; letter-spacing: .02em; }
+  .name b { color: #f2f4f7; font-weight: 600; }
+  .price { font-size: 9vh; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chg { font-size: 3.6vh; margin-left: 2.5vw; min-width: 11vw; text-align: right; font-variant-numeric: tabular-nums; }
+  .up { color: #3ccf7a; } .down { color: #ff5c5c; } .flat { color: #9aa4b2; }
+  .foot { margin-top: 4vh; font-size: 2.4vh; color: #5f6b7a; }
+</style>
+</head>
+<body>
+  <div class="row"><div class="name"><b>Bitcoin</b> &nbsp;USD</div><div><span class="price" id="btcusd">…</span><span class="chg" id="btcusd-c"></span></div></div>
+  <div class="row"><div class="name"><b>Bitcoin</b> &nbsp;GBP</div><div><span class="price" id="btcgbp">…</span><span class="chg" id="btcgbp-c"></span></div></div>
+  <div class="row"><div class="name"><b>Ethereum</b> &nbsp;GBP</div><div><span class="price" id="ethgbp">…</span><span class="chg" id="ethgbp-c"></span></div></div>
+  <div class="foot" id="foot">Loading prices…</div>
+<script>
+  var GECKO = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd,gbp&include_24hr_change=true";
+  var COINBASE = "https://api.coinbase.com/v2/prices/";
+
+  function money(v, cur) {
+    var sym = cur === "usd" ? "$" : "£";
+    return sym + Number(v).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function show(id, v, cur, chg) {
+    document.getElementById(id).textContent = money(v, cur);
+    var c = document.getElementById(id + "-c");
+    if (typeof chg === "number") {
+      c.textContent = (chg >= 0 ? "+" : "") + chg.toFixed(2) + "%";
+      c.className = "chg " + (chg > 0.005 ? "up" : chg < -0.005 ? "down" : "flat");
+    } else { c.textContent = ""; }
+  }
+  function stamp(src) {
+    var t = new Date();
+    document.getElementById("foot").textContent = "24h change · updated " +
+      t.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) + " · " + src;
+  }
+  function fromGecko() {
+    return fetch(GECKO).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (d) {
+      show("btcusd", d.bitcoin.usd, "usd", d.bitcoin.usd_24h_change);
+      show("btcgbp", d.bitcoin.gbp, "gbp", d.bitcoin.gbp_24h_change);
+      show("ethgbp", d.ethereum.gbp, "gbp", d.ethereum.gbp_24h_change);
+      stamp("CoinGecko");
+    });
+  }
+  function spot(pair) {
+    return fetch(COINBASE + pair + "/spot").then(function (r) { return r.json(); })
+      .then(function (d) { return Number(d.data.amount); });
+  }
+  function fromCoinbase() {
+    return Promise.all([spot("BTC-USD"), spot("BTC-GBP"), spot("ETH-GBP")]).then(function (p) {
+      show("btcusd", p[0], "usd"); show("btcgbp", p[1], "gbp"); show("ethgbp", p[2], "gbp");
+      stamp("Coinbase");
+    });
+  }
+  function refresh() {
+    fromGecko().catch(function () {
+      return fromCoinbase().catch(function () {
+        document.getElementById("foot").textContent = "Prices unavailable, retrying…";
+      });
+    });
+  }
+  refresh();
+  setInterval(refresh, 60000);
+</script>
+</body>
+</html>
